@@ -181,6 +181,12 @@ input,textarea,select{font-family:inherit}
 @media (max-width:520px){#nav{padding:0 6px 0 12px}#nav b{font-size:13px;letter-spacing:.04em}#nav b .bs{display:none}#nav b:before{margin-right:7px}#nav button{padding:8px 9px;font-size:13px}.hero{flex-direction:column;text-align:center}.chips{justify-content:center}#addbar{white-space:normal;width:max-content;max-width:calc(100vw - 24px);text-align:center}#cp{right:12px;bottom:calc(214px + env(safe-area-inset-bottom,0px))}}
 @media (max-width:700px){#hint{display:none}}
 .lnk{display:block}
+#tstart{display:none;position:fixed;z-index:14;left:50%;bottom:calc(14vh + env(safe-area-inset-bottom,0px));transform:translateX(-50%);padding:15px 46px;border:0;border-radius:40px;background:linear-gradient(120deg,var(--ac),var(--leaf));color:#fff;font-size:19px;font-weight:700;letter-spacing:.22em;cursor:pointer;box-shadow:0 12px 32px rgba(15,139,141,.34);transition:box-shadow .2s,filter .2s;animation:tpulse 2.2s infinite}
+#tstart:hover{filter:brightness(1.06);box-shadow:0 18px 40px rgba(47,158,107,.45)}
+#tstart:active{transform:translateX(-50%) scale(.95)}
+@keyframes tpulse{50%{transform:translateX(-50%) translateY(-5px)}}
+#ui.tk:not(.st) #tstart{display:block}
+#ui.tk:not(.st) #tkp{display:none}
 .lnk{display:block}
 </style></head><body>
 <div id="wrap"><canvas id="cv"></canvas></div>
@@ -206,6 +212,7 @@ input,textarea,select{font-family:inherit}
 <section class="card"><h2>後台系統</h2><div class="bkc"><p>教師專用：查看學生上傳的植物紀錄，以平面圖呈現，並標示班級、組別與姓名。</p><button id="bkopen">進入後台</button></div></section>
 </div></div>
 <div id="nav"><b>大竹國中<span class="bs">　埤塘植物踏查</span></b><button data-a="task" class="a">任務標記</button><button data-a="ab">關於</button><button data-a="out" class="lo">登出</button></div>
+<button id="tstart">點我開始</button>
 <div class="pn" id="tkp"><h2 id="tkh"><span>植物紀錄</span><span class="bdg" id="tkn">0</span></h2><div class="body">
 <div class="tk-btns"><button id="tadd" class="pbtn">＋ 新增</button><button id="tdel" class="pbtn" disabled>－ 刪除</button></div>
 <div id="tlist"></div><button id="tup" class="pbtn" disabled>儲存並上傳</button>
@@ -395,6 +402,7 @@ $('mkc').onclick=()=>{cancelAdd();dirty=true};
 function saveMark(){const n=$('mkn2').value.trim();if(!n){$('mkerr').textContent='請輸入植物名稱';$('mkn2').focus();return}if(!draft)return;
  RECS.push({name:n,note:$('mkt').value.trim(),date:new Date().toISOString().slice(0,10),x:draft.x,y:draft.y,z:draft.z,up:false});saveRecs();selMark=RECS.length-1;cancelAdd();updateTask();dirty=true}
 $('mks').onclick=saveMark;$('mkn2').addEventListener('keydown',e=>{if(e.key==='Enter')saveMark()});
+$('tstart').onclick=()=>{$('ui').classList.add('st');$('tkp').classList.remove('col');dirty=true};
 $('tkh').onclick=()=>$('tkp').classList.toggle('col');$('bkh').onclick=()=>$('bkp').classList.toggle('col');
 if(innerWidth<520){$('tkp').classList.add('col');$('bkp').classList.add('col')}
 function taskClick(x,y){const m=pickMark(x,y);if(m>=0&&!draft){selMark=m;if(adding)cancelAdd();updateTask();dirty=true;return}
@@ -485,7 +493,7 @@ function show(c){if(c!=='task')cancelAdd();if(cur==='bk'&&c!=='bk')stopBk();
  if(c==='task'||c==='bk')enterView(c);if(c==='bk')startBk();
  if(HINTS[c]){const h=$('hint');h.textContent=HINTS[c];h.classList.remove('off');clearTimeout(hintT);hintT=setTimeout(()=>h.classList.add('off'),9000)}dirty=true}
 function setMode(en){entered=en;$('land').classList.toggle('off',en);$('nav').classList.toggle('on',en);$('ui').classList.toggle('on',en);wrap.classList.toggle('on',en);
- if(!en){stopBk();viewKind=null;$('pw').value='';$('err').textContent='';cancelAdd();$('ui').classList.remove('tk','ab','bk');$('about').classList.remove('on');goal.tx=goal.ty=195;goal.pitch=.6;goal.dist=fitD*1.2}
+ if(!en){stopBk();viewKind=null;$('pw').value='';$('err').textContent='';cancelAdd();$('ui').classList.remove('tk','ab','bk','st');$('about').classList.remove('on');goal.tx=goal.ty=195;goal.pitch=.6;goal.dist=fitD*1.2}
  dirty=true}
 function go(c){if(busy||c===cur)return;busy=true;$('trt').textContent=c==='home'?'正在登出':'正在前往「'+NM[c]+'」';$('tb').style.width='0%';$('tr').classList.add('on');const t0=performance.now();
  (function st(t){const k=Math.min(1,(t-t0)/1000),p=100*(1-Math.pow(1-k,1.6));$('tb').style.width=p+'%';$('tp').textContent=Math.round(p)+'%';
