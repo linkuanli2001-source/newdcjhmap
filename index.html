@@ -187,6 +187,7 @@ input,textarea,select{font-family:inherit}
 @keyframes tpulse{50%{transform:translateX(-50%) translateY(-5px)}}
 #ui.tk:not(.st) #tstart{display:block}
 #ui.tk:not(.st) #tkp{display:none}
+.ver{text-align:center;color:var(--mut);font-size:11px;letter-spacing:.06em;padding:4px 0 8px}
 .lnk{display:block}
 </style></head><body>
 <div id="wrap"><canvas id="cv"></canvas></div>
@@ -209,6 +210,7 @@ input,textarea,select{font-family:inherit}
 <li><b>清爽自然的配色：</b>以白色為底，搭配水藍、草綠與暖米色，建築帶有陰影，樹木點綴其間。</li>
 <li><b>節奏感的過場：</b>每次切換頁面都有進度條，浮動的按鈕與點擊光圈讓操作有回應。</li></ul></section>
 <section class="card"><h2>後台系統</h2><div class="bkc"><p>教師專用：查看學生上傳的植物紀錄，以平面圖呈現，並標示班級、組別與姓名。</p><button id="bkopen">進入後台</button></div></section>
+<div id="ver" class="ver"></div>
 </div></div>
 <div id="nav"><b>大竹國中<span class="bs">　埤塘植物踏查</span></b><button data-a="task" class="a">任務標記</button><button data-a="ab">關於</button><button data-a="out" class="lo">登出</button></div>
 <button id="tstart">點我開始</button>
@@ -218,7 +220,7 @@ input,textarea,select{font-family:inherit}
 <small class="fn">紀錄會先存在這台裝置；已上傳的紀錄無法在這裡刪除。</small></div></div>
 <div class="pn" id="bkp"><h2 id="bkh"><span>學生上傳紀錄</span><span class="bdg" id="bkn">0</span></h2><div class="body">
 <div id="bkm"></div><div class="fl"><select id="bkc" class="sel2"></select><select id="bkg" class="sel2"></select></div><div class="lg" id="lg"></div>
-<div id="bkl"></div><button id="bkr" class="lnk" hidden>重新整理</button><button id="bkx" class="lnk">匯出 CSV</button><button id="bkb" class="lnk">← 回到關於</button></div></div>
+<div id="bkl"></div><button id="bki" class="lnk">匯入學生 CSV</button><input type="file" id="bkf" accept=".csv,text/csv,text/plain" multiple hidden><button id="bks" class="lnk" hidden>同步到雲端</button><button id="bkt" class="lnk" hidden>連線測試</button><button id="bkr" class="lnk" hidden>重新整理</button><button id="bkx" class="lnk">匯出 CSV</button><button id="bkb" class="lnk">← 回到關於</button></div></div>
 <div id="mk"><h3>新增植物紀錄</h3><label class="fld"><span>植物名稱（必填）</span><input id="mkn2" maxlength="30" placeholder="例如：樟樹"></label><label class="fld"><span>觀察備註</span><textarea id="mkt" maxlength="120" rows="2" placeholder="葉子、花、果實的特徵…"></textarea></label><div class="mkerr" id="mkerr"></div><div class="mb"><button id="mkc">取消</button><button id="mks" style="background:linear-gradient(120deg,var(--ac),var(--leaf));color:#fff;border:0">新增</button></div></div>
 <div id="addbar">請點選地圖上的位置</div>
 <div id="hint"></div>
@@ -374,7 +376,8 @@ function groundAt(sx0,sy0){setCam();const a=(sx0-ox)/FF,b=-(sy0-oy)/FF,dx=fx+a*r
  if(px<0||px>390||py<0||py>390)return null;return{x:+px.toFixed(1),y:+py.toFixed(1),z:+(z+.2).toFixed(2)}}
 // ---- helpers
 const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let toastT=0;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3200)}
+let toastT=0;function toast(m,ms){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),ms||3200)}
+async function postJson(o){const ac=new AbortController(),t=setTimeout(()=>ac.abort(),25000);try{const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(o),signal:ac.signal});return await r.json()}finally{clearTimeout(t)}}
 let dl=null;try{if(window.claude&&claude.use)claude.use('downloads').then(d=>{dl=d}).catch(()=>{})}catch(e){}
 function csvText(rows){return'﻿'+rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n')}
 async function saveCsv(name,rows){const txt=csvText(rows);if(dl){try{await dl.save({filename:name,data:txt});return}catch(e){if(e&&e.code==='declined')return}}
@@ -415,21 +418,28 @@ function upData(){const cls=$('upc').value.trim(),grp=$('upg').value.trim(),stud
 async function doUpload(){const who=upData();if(!who)return;const P=pend(),btn=$('ups');btn.disabled=true;btn.textContent='上傳中…';$('uperr').textContent='';
  const items=P.map(r=>({name:r.name,note:r.note,date:r.date,x:r.x,y:r.y,z:r.z}));
  try{let id;
-  if(ENDPOINT){const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'submit',cls:who.cls,grp:who.grp,student:who.student,items})});const j=await r.json();if(!j.ok)throw{code:'remote'};id=j.id}
+  if(ENDPOINT){const j=await postJson({action:'submit',cls:who.cls,grp:who.grp,student:who.student,items});if(!j.ok)throw{code:'remote'};id=j.id}
   else{if(!(window.claude&&claude.use))throw{code:'nodb'};const db=await claude.use('db'),user=await claude.use('user');const uid=user?await user.id():null;if(!db||!uid)throw{code:'nodb'};
    id='u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);const up={ts:new Date().toISOString(),cls:who.cls,grp:who.grp,student:who.student,items},ref=db.doc('subs/'+uid);
    try{await ref.update({uploads:{[id]:up}})}catch(e){if(e&&e.code==='invalid_argument')await ref.set({uploads:{[id]:up}});else throw e}}
   P.forEach(r=>{r.up=true;r.upId=id});saveRecs();selMark=-1;updateTask();dirty=true;$('upm').classList.remove('on');toast('已上傳 '+P.length+' 筆，老師可以在後台看到了')}
- catch(e){const c=e&&e.code;$('uperr').textContent=c==='nodb'?'這個網頁尚未設定上傳位置。請按下方「下載檔案」，把檔案交給老師。':c==='remote'?'伺服器沒有接受資料，請稍後再試，或按下方「下載檔案」。':c==='invalid_argument'?'你的帳號沒有上傳權限（需要「貢獻者」以上），請洽老師。':c==='quota_exceeded'?'資料庫容量已滿，請洽老師。':(e instanceof TypeError)?'網路連線失敗，請檢查網路後再試，或按下方「下載檔案」。':'上傳失敗，請稍後再試，或按下方「下載檔案」。';$('upd').hidden=false}
+ catch(e){const c=e&&e.code;$('uperr').textContent=c==='nodb'?'這個網頁尚未設定上傳位置。請按下方「下載檔案」，把檔案交給老師。':c==='remote'?'伺服器沒有接受資料，請稍後再試，或按下方「下載檔案」。':c==='invalid_argument'?'你的帳號沒有上傳權限（需要「貢獻者」以上），請洽老師。':c==='quota_exceeded'?'資料庫容量已滿，請洽老師。':(e instanceof TypeError)?'目前連不到上傳伺服器。請先按下方「下載檔案」，把檔案交給老師，並請老師檢查上傳設定。':'上傳失敗，請稍後再試，或按下方「下載檔案」。';$('upd').hidden=false}
  btn.disabled=false;btn.textContent='確定上傳'}
 $('tup').onclick=openUpload;$('upx').onclick=()=>$('upm').classList.remove('on');$('ups').onclick=doUpload;
 $('upd').onclick=()=>{const who=upData();if(!who)return;const P=pend();saveCsv('大竹國中植物紀錄_'+who.cls+'班第'+who.grp+'組_'+who.student+'.csv',[['班級','組別','姓名','植物名稱','觀察備註','日期','X(公尺)','Y(公尺)']].concat(P.map(r=>[who.cls,who.grp,who.student,r.name,r.note,r.date,r.x,r.y])))};
 ['upc','upg','upn'].forEach(k=>$(k).addEventListener('keydown',e=>{if(e.key==='Enter')doUpload()}));
 // ---- backend
-let SUBS=[],CLS=[],unsub=null,selSub=-1,bkMsg='',bkReq=0,bkKey='',bkTimer=0;
+let SUBS=[],CLS=[],unsub=null,selSub=-1,bkMsg='',bkReq=0,bkKey='',bkTimer=0,REMOTE=[];
+const IMK='dazhu-imports-v1';
+function loadLocal(){try{const a=JSON.parse(localStorage.getItem(IMK)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
+function saveLocal(a){try{localStorage.setItem(IMK,JSON.stringify(a))}catch(e){toast('這台電腦的儲存空間已滿')}}
+function localRows(){return flattenRemote(loadLocal()).map(r=>{r.uid='l';return r})}
+function setSubs(rows){REMOTE=rows;const all=rows.concat(localRows());all.sort((a,b)=>(a.ts<b.ts?-1:a.ts>b.ts?1:0));all.forEach((r,i)=>r.n=i+1);SUBS=all}
+function delLocal(id){saveLocal(loadLocal().filter(u=>String(u.id)!==String(id)));setSubs(REMOTE)}
+function updSync(){const n=loadLocal().length;$('bks').hidden=!(ENDPOINT&&n);$('bks').textContent='同步 '+n+' 次匯入到雲端'}
 function flattenRemote(ups){const rows=[];for(const u of ups||[]){if(!u||!Array.isArray(u.items))continue;for(const it of u.items){if(typeof it.x!=='number'||typeof it.y!=='number')continue;rows.push({uid:'r',upId:String(u.id),cls:String(u.cls||'?'),grp:String(u.grp||'?'),student:String(u.student||'?'),ts:u.ts||'',name:String(it.name||''),note:String(it.note||''),date:it.date||'',x:it.x,y:it.y,z:typeof it.z==='number'?it.z:5})}}rows.sort((a,b)=>(a.ts<b.ts?-1:a.ts>b.ts?1:0));rows.forEach((r,i)=>r.n=i+1);return rows}
 async function remoteGet(){const r=await fetch(ENDPOINT+(ENDPOINT.includes('?')?'&':'?')+'action=list&key='+encodeURIComponent(bkKey));return r.json()}
-async function remoteLoad(my){try{const j=await remoteGet();if(my!==bkReq)return;if(!j.ok)throw 0;SUBS=flattenRemote(j.uploads);bkMsg=''}catch(e){if(my!==bkReq)return;bkMsg='讀取失敗，請確認後台設定與網路。'}renderBk()}
+async function remoteLoad(my){try{const j=await remoteGet();if(my!==bkReq)return;if(!j.ok)throw 0;setSubs(flattenRemote(j.uploads));bkMsg=''}catch(e){if(my!==bkReq)return;setSubs([]);bkMsg='讀取不到雲端資料（不影響匯入）。可按「連線測試」檢查上傳設定。'}renderBk()}
 function flatten(docs){const rows=[];for(const d of docs){const data=d.data(),ups=data&&data.uploads;if(!ups||typeof ups!=='object')continue;
   for(const k of Object.keys(ups)){const u=ups[k];if(!u||!Array.isArray(u.items))continue;for(const it of u.items){if(typeof it.x!=='number'||typeof it.y!=='number')continue;rows.push({uid:d.id,upId:k,cls:String(u.cls||'?'),grp:String(u.grp||'?'),student:String(u.student||'?'),ts:u.ts||'',name:String(it.name||''),note:String(it.note||''),date:it.date||'',x:it.x,y:it.y,z:typeof it.z==='number'?it.z:5})}}}
  rows.sort((a,b)=>(a.ts<b.ts?-1:a.ts>b.ts?1:0));rows.forEach((r,i)=>r.n=i+1);return rows}
@@ -437,31 +447,56 @@ function visRows(){const c=$('bkc').value||'',g=$('bkg').value||'';return SUBS.f
 function fillSel(el,vals,all){const v=el.value;el.innerHTML='<option value="">'+all+'</option>'+vals.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');el.value=vals.includes(v)?v:''}
 function renderBk(){const nat=(a,b)=>a.localeCompare(b,'zh-Hant',{numeric:true});CLS=[...new Set(SUBS.map(r=>r.cls))].sort(nat);
  fillSel($('bkc'),CLS,'全部班級');const c=$('bkc').value;fillSel($('bkg'),[...new Set(SUBS.filter(r=>!c||r.cls===c).map(r=>r.grp))].sort(nat),'全部組別');
- const rows=visRows();$('bkn').textContent=rows.length;if(selSub>=rows.length)selSub=-1;
+ const rows=visRows();$('bkn').textContent=rows.length;const loc=rows.filter(r=>r.uid==='l').length;if(selSub>=rows.length)selSub=-1;
  const ppl=new Set(rows.map(r=>r.cls+'|'+r.grp+'|'+r.student)).size;
- $('bkm').textContent=bkMsg||(SUBS.length?'共 '+rows.length+' 筆紀錄 · '+ppl+' 位學生':'目前沒有學生上傳的紀錄。若學生已上傳卻看不到，請確認你是以頁面擁有者或編輯者身分登入。');
+ $('bkm').textContent=(bkMsg&&SUBS.length?bkMsg+'　目前顯示 '+rows.length+' 筆。':bkMsg)||(SUBS.length?'共 '+rows.length+' 筆紀錄 · '+ppl+' 位學生'+(loc?' · 其中 '+loc+' 筆只存在這台電腦':''):(ENDPOINT?'目前還沒有紀錄。學生上傳後會出現在這裡，也可以按「匯入學生 CSV」把學生下載的檔案補進來。':'目前沒有學生上傳的紀錄。若學生已上傳卻看不到，請確認你是以頁面擁有者或編輯者身分登入。'));
  $('lg').innerHTML=CLS.map(k=>'<span><i style="background:'+clsColor(k)+'"></i>'+esc(k)+'班</span>').join('');
  const L=$('bkl');L.innerHTML='';const groups=new Map();rows.forEach((r,i)=>{const k=r.uid+'|'+r.upId;if(!groups.has(k))groups.set(k,[]);groups.get(k).push([r,i])});
  for(const [k,arr] of groups){const r0=arr[0][0],d=document.createElement('div');d.className='up';
   d.innerHTML='<div class="uh"><div><b>'+esc(r0.cls)+'班 · 第'+esc(r0.grp)+'組 · '+esc(r0.student)+'</b><small>'+esc((r0.ts||'').replace('T',' ').slice(0,16))+' · '+arr.length+' 筆</small></div><button class="x dng">刪除上傳</button></div>';
   for(const [r,i] of arr){const p=document.createElement('div');p.className='pr'+(i===selSub?' sel':'');p.innerHTML='<i style="background:'+clsColor(r.cls)+'"></i><div><b>'+r.n+'. '+esc(r.name)+'</b>'+(r.note?'<br><small>'+esc(r.note)+'</small>':'')+'</div>';p.onclick=()=>{selSub=i;showSub(r);goal.tx=r.x;goal.ty=r.y;renderBk();dirty=true};d.appendChild(p)}
-  const x=d.querySelector('.x');x.onclick=async()=>{if(x.classList.contains('arm')){if(ENDPOINT){try{const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'delete',key:bkKey,id:r0.upId})});const j=await r.json();if(!j.ok)throw 0;await remoteLoad(bkReq)}catch(e){toast('刪除失敗')}return}try{const db=await claude.use('db'),ref=db.doc('subs/'+r0.uid),s=await ref.get();if(s.exists){const o=JSON.parse(JSON.stringify(s.data()));if(o.uploads)delete o.uploads[r0.upId];await ref.set(o)}}catch(e){toast('刪除失敗')}}else{x.classList.add('arm');x.textContent='確定？';setTimeout(()=>{x.classList.remove('arm');x.textContent='刪除上傳'},2500)}};
-  L.appendChild(d)}dirty=true}
+  const x=d.querySelector('.x');x.onclick=async()=>{if(x.classList.contains('arm')){if(r0.uid==='l'){delLocal(r0.upId);selSub=-1;renderBk();return}if(ENDPOINT){try{const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'delete',key:bkKey,id:r0.upId})});const j=await r.json();if(!j.ok)throw 0;await remoteLoad(bkReq)}catch(e){toast('刪除失敗')}return}try{const db=await claude.use('db'),ref=db.doc('subs/'+r0.uid),s=await ref.get();if(s.exists){const o=JSON.parse(JSON.stringify(s.data()));if(o.uploads)delete o.uploads[r0.upId];await ref.set(o)}}catch(e){toast('刪除失敗')}}else{x.classList.add('arm');x.textContent='確定？';setTimeout(()=>{x.classList.remove('arm');x.textContent='刪除上傳'},2500)}};
+  L.appendChild(d)}updSync();dirty=true}
 function showSub(r){$('in').textContent=r.name;$('ib').innerHTML='<div class="rw">班級<b>'+esc(r.cls)+' 班</b></div><div class="rw">組別<b>第 '+esc(r.grp)+' 組</b></div><div class="rw">姓名<b>'+esc(r.student)+'</b></div><div class="rw">日期<b>'+esc(r.date)+'</b></div>'+(r.note?'<div class="rw">備註<b>'+esc(r.note)+'</b></div>':'');$('info').classList.add('on')}
 $('ic').onclick=()=>{selSub=-1;$('info').classList.remove('on');renderBk();dirty=true};
 ['bkc','bkg'].forEach(k=>$(k).onchange=()=>{selSub=-1;$('info').classList.remove('on');renderBk()});
-async function startBk(){const my=++bkReq;bkMsg='連線中…';SUBS=[];renderBk();
- if(ENDPOINT){$('bkr').hidden=false;await remoteLoad(my);clearInterval(bkTimer);bkTimer=setInterval(()=>{if(cur==='bk'&&!busy)remoteLoad(bkReq)},20000);return}$('bkr').hidden=true;let db=null;try{if(window.claude&&claude.use)db=await claude.use('db')}catch(e){}
+async function startBk(){const my=++bkReq;bkMsg='連線中…';setSubs([]);renderBk();
+ if(ENDPOINT){$('bkr').hidden=false;$('bkt').hidden=false;await remoteLoad(my);clearInterval(bkTimer);bkTimer=setInterval(()=>{if(cur==='bk'&&!busy)remoteLoad(bkReq)},20000);return}$('bkr').hidden=true;$('bkt').hidden=true;let db=null;try{if(window.claude&&claude.use)db=await claude.use('db')}catch(e){}
  if(my!==bkReq)return;if(!db){bkMsg='無法連線到資料庫。請以老師帳號登入 claude.ai 後開啟此頁。';renderBk();return}
- unsub=db.collection('subs').onSnapshot(s=>{SUBS=flatten(s.docs);bkMsg='';renderBk()},e=>{bkMsg='讀取失敗（'+(e&&e.code||'未知')+'）。';renderBk()})}
+ unsub=db.collection('subs').onSnapshot(s=>{setSubs(flatten(s.docs));bkMsg='';renderBk()},e=>{bkMsg='讀取失敗（'+(e&&e.code||'未知')+'）。';renderBk()})}
 function stopBk(){bkReq++;clearInterval(bkTimer);if(unsub){unsub();unsub=null}$('info').classList.remove('on');selSub=-1}
+function parseCsv(t){const rows=[];let r=[],f='',q=false;t=t.replace(/^\ufeff/,'');for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}else if(c==='"')q=true;else if(c===','){r.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;r.push(f);f='';if(r.some(v=>v!==''))rows.push(r);r=[]}else f+=c}if(f!==''||r.length){r.push(f);if(r.some(v=>v!==''))rows.push(r)}return rows}
+function decodeBuf(b){try{return new TextDecoder('utf-8',{fatal:true}).decode(b)}catch(e){try{return new TextDecoder('big5').decode(b)}catch(e2){return new TextDecoder('utf-8').decode(b)}}}
+const ikey=(c,g,s2,n,x,y)=>[c,g,s2,n,(+x).toFixed(1),(+y).toFixed(1)].join('|');
+async function importFiles(files){const seen=new Set(SUBS.map(r=>ikey(r.cls,r.grp,r.student,r.name,r.x,r.y))),groups=new Map();let bad=0,dup=0,wrong=0;
+ for(const f of files){let rows;try{rows=parseCsv(decodeBuf(await f.arrayBuffer()))}catch(e){wrong++;continue}
+  if(rows.length<2){wrong++;continue}const h=rows[0].map(v=>v.trim()),ix=k=>h.findIndex(v=>v.startsWith(k)),c=ix('班級'),g=ix('組別'),s2=ix('姓名'),nm=ix('植物名稱'),no=ix('觀察備註'),dt=ix('日期'),xx=ix('X'),yy=ix('Y');
+  if([c,g,s2,nm,xx,yy].some(v=>v<0)){wrong++;continue}
+  for(const r of rows.slice(1)){const cls=(r[c]||'').trim().slice(0,12),grp=(r[g]||'').trim().slice(0,12),stu=(r[s2]||'').trim().slice(0,12),name=(r[nm]||'').trim().slice(0,30),x=parseFloat(r[xx]),y=parseFloat(r[yy]);
+   if(!cls||!grp||!stu||!name||!isFinite(x)||!isFinite(y)||x<-50||x>450||y<-50||y>450){bad++;continue}
+   const k=ikey(cls,grp,stu,name,x,y);if(seen.has(k)){dup++;continue}seen.add(k);
+   const gk=cls+'|'+grp+'|'+stu;if(!groups.has(gk))groups.set(gk,{cls,grp,student:stu,items:[]});
+   groups.get(gk).items.push({name,note:((no>=0?r[no]:'')||'').trim().slice(0,120),date:((dt>=0?r[dt]:'')||'').trim().slice(0,10),x,y,z:+(heightAt(x,y)+.2).toFixed(2)})}}
+ const total=[...groups.values()].reduce((a,u)=>a+u.items.length,0);
+ if(!total){toast(wrong&&!dup?'檔案格式不對，請選學生按「下載檔案」得到的 CSV':dup?'這些紀錄都已經匯入過了':'沒有可匯入的紀錄',5000);return}
+ let cloud=0,local=0;const keep=loadLocal();
+ for(const u of groups.values()){let ok=false;
+  if(ENDPOINT){try{ok=true;for(let i=0;i<u.items.length;i+=200){const j=await postJson({action:'submit',cls:u.cls,grp:u.grp,student:u.student,items:u.items.slice(i,i+200)});if(!j.ok)throw 0}}catch(e){ok=false}}
+  if(ok)cloud+=u.items.length;else{local+=u.items.length;keep.push({id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:new Date().toISOString(),cls:u.cls,grp:u.grp,student:u.student,items:u.items})}}
+ saveLocal(keep);if(ENDPOINT&&cloud)await remoteLoad(bkReq);else{setSubs(REMOTE);renderBk()}
+ toast('匯入 '+total+' 筆'+(cloud?'：已存到雲端 '+cloud+' 筆':'')+(local?(cloud?'，':'：')+local+' 筆暫存在這台電腦'+(ENDPOINT?'（雲端連不上）':''):'')+(dup?'；略過重複 '+dup+' 筆':'')+(bad?'；無效 '+bad+' 筆':''),7000)}
+$('bki').onclick=()=>$('bkf').click();
+$('bkf').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(fs.length)await importFiles(fs)};
+$('bks').onclick=async()=>{const arr=loadLocal(),keep=[];let ok=0;for(const u of arr){try{for(let i=0;i<u.items.length;i+=200){const j=await postJson({action:'submit',cls:u.cls,grp:u.grp,student:u.student,items:u.items.slice(i,i+200)});if(!j.ok)throw 0}ok++}catch(e){keep.push(u)}}
+ saveLocal(keep);await remoteLoad(bkReq);toast(ok?'已同步 '+ok+' 次匯入到雲端'+(keep.length?'，還有 '+keep.length+' 次失敗':''):'同步失敗，雲端目前連不上',5000)};
+$('bkt').onclick=async()=>{toast('測試連線中…');try{const j=await remoteGet();if(j&&j.ok)toast('連線正常：雲端目前有 '+j.uploads.length+' 次上傳',5000);else toast('伺服器有回應，但密碼不符。請確認 Apps Script 的 TEACHER_KEY 與後台密碼相同',8000)}catch(e){toast('連不上上傳伺服器。請到 Apps Script「部署」→「管理部署作業」，確認「誰可以存取」是「所有人」，並用最新版本的網址',9000)}};
 $('bkx').onclick=()=>saveCsv('大竹國中植物紀錄_全部.csv',[['班級','組別','姓名','植物名稱','觀察備註','日期','上傳時間','X(公尺)','Y(公尺)']].concat(visRows().map(r=>[r.cls,r.grp,r.student,r.name,r.note,r.date,r.ts,r.x,r.y])));
 $('bkb').onclick=()=>go('ab');$('bkr').onclick=()=>{bkMsg='更新中…';renderBk();remoteLoad(bkReq)};
 function bkClick(x,y){const m=pickMark(x,y);if(m>=0){selSub=m;const r=visRows()[m];if(r)showSub(r);renderBk();const el=document.querySelector('.pr.sel');if(el)el.scrollIntoView({block:'nearest'})}else{selSub=-1;$('info').classList.remove('on');renderBk()}dirty=true}
 $('bkopen').onclick=()=>{$('bkpw').value='';$('bkerr').textContent='';$('bkm2').classList.add('on');setTimeout(()=>$('bkpw').focus(),60)};
 $('bkcx').onclick=()=>$('bkm2').classList.remove('on');
 async function tryBk(){const pw=$('bkpw').value;let ok=pw==='9999';
- if(ENDPOINT){$('bkerr').textContent='驗證中…';try{bkKey=pw;const j=await remoteGet();ok=!!(j&&j.ok)}catch(e){$('bkerr').textContent='無法連線到後台伺服器';return}}
+ if(ENDPOINT){$('bkerr').textContent='驗證中…';try{bkKey=pw;const j=await remoteGet();ok=!!(j&&j.ok)}catch(e){if(pw!=='9999'){$('bkerr').textContent='無法連線到後台伺服器，請稍後再試';return}ok=true;bkKey=pw}}
  if(ok){$('bkm2').classList.remove('on');go('bk')}else{$('bkerr').textContent='密碼錯誤，請再試一次';const p=$('bkpw');p.classList.remove('sk');void p.offsetWidth;p.classList.add('sk')}}
 $('bkgo').onclick=tryBk;$('bkpw').addEventListener('keydown',e=>{if(e.key==='Enter')tryBk()});
 // ---- controls
@@ -513,6 +548,7 @@ function frame(t){const dt=Math.min(50,t-last);last=t;let mv=false;
  if(draft)dirty=true;
  if(mv||dirty){try{draw()}catch(err){console.error(err)}dirty=false}requestAnimationFrame(frame)}
 addEventListener('resize',resize);
+$('ver').textContent='版本 20261008-2　·　上傳設定：'+(ENDPOINT?'已設定':'未設定');
 loadRecs();updateTask();
 (async()=>{resize();readColors();requestAnimationFrame(frame);await tick();
  D=JSON.parse($('d').textContent);pt=30;await tick();build();recolor();built=true;pt=70;await tick();pt=90;await tick();dirty=true;pt=100})();
