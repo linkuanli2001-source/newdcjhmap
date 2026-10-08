@@ -217,7 +217,7 @@ input,textarea,select{font-family:inherit}
 <div class="pn" id="tkp"><h2 id="tkh"><span>植物紀錄</span><span class="bdg" id="tkn">0</span></h2><div class="body">
 <div class="tk-btns"><button id="tadd" class="pbtn">＋ 新增</button><button id="tdel" class="pbtn" disabled>－ 刪除</button></div>
 <div id="tlist"></div><button id="tup" class="pbtn" disabled>儲存並上傳</button>
-<small class="fn">紀錄會先存在這台裝置；已上傳的紀錄無法在這裡刪除。</small></div></div>
+<small class="fn">紀錄會先存在這台裝置；上傳成功後，這台裝置就不會再保留，老師可在後台查看。</small></div></div>
 <div class="pn" id="bkp"><h2 id="bkh"><span>學生上傳紀錄</span><span class="bdg" id="bkn">0</span></h2><div class="body">
 <div id="bkm"></div><div class="fl"><select id="bkc" class="sel2"></select><select id="bkg" class="sel2"></select></div><div class="lg" id="lg"></div>
 <div id="bkl"></div><button id="bki" class="lnk">匯入學生 CSV</button><input type="file" id="bkf" accept=".csv,text/csv,text/plain" multiple hidden><button id="bks" class="lnk" hidden>同步到雲端</button><button id="bkt" class="lnk" hidden>連線測試</button><button id="bkr" class="lnk" hidden>重新整理</button><button id="bkx" class="lnk">匯出 CSV</button><button id="bkb" class="lnk">← 回到關於</button></div></div>
@@ -384,7 +384,7 @@ async function saveCsv(name,rows){const txt=csvText(rows);if(dl){try{await dl.sa
  try{const u=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast('已下載檔案：'+name)}catch(e){toast('此瀏覽器無法下載，請改用電腦或 Chrome／Safari 開啟')}}
 // ---- student records
 const KEY='dazhu-plants-v2',IDK='dazhu-student-v1';let RECS=[],selMark=-1,adding=false,draft=null,armT=0;
-function loadRecs(){try{const a=JSON.parse(localStorage.getItem(KEY)||'[]');RECS=Array.isArray(a)?a.filter(r=>r&&typeof r.x==='number'&&typeof r.y==='number'&&r.name):[]}catch(e){RECS=[]}}
+function loadRecs(){try{const a=JSON.parse(localStorage.getItem(KEY)||'[]');RECS=Array.isArray(a)?a.filter(r=>r&&!r.up&&typeof r.x==='number'&&typeof r.y==='number'&&r.name):[]}catch(e){RECS=[]}try{localStorage.removeItem(IDK)}catch(e){}}
 function saveRecs(){try{localStorage.setItem(KEY,JSON.stringify(RECS))}catch(e){}}
 function pend(){return RECS.filter(r=>!r.up)}
 function updateTask(){const P=pend().length;$('tkn').textContent=RECS.length;const cs=RECS[selMark];$('tdel').disabled=!cs||cs.up;$('tdel').classList.remove('arm');$('tdel').textContent='－ 刪除';
@@ -412,9 +412,9 @@ function taskClick(x,y){const m=pickMark(x,y);if(m>=0&&!draft){selMark=m;if(addi
  selMark=-1;updateTask();dirty=true}
 // ---- upload
 function myId(){try{return JSON.parse(localStorage.getItem(IDK)||'{}')}catch(e){return{}}}
-function openUpload(){const P=pend();if(!P.length)return;const m=myId();$('upc').value=m.cls||'';$('upg').value=m.grp||'';$('upn').value=m.student||'';$('uperr').textContent='';$('ups0').textContent='本次共 '+P.length+' 筆植物紀錄：'+P.slice(0,4).map(r=>r.name).join('、')+(P.length>4?'…':'');$('upd').hidden=false;$('upm').classList.add('on');setTimeout(()=>$('upc').focus(),60)}
+function openUpload(){const P=pend();if(!P.length)return;$('upc').value='';$('upg').value='';$('upn').value='';$('uperr').textContent='';$('ups0').textContent='本次共 '+P.length+' 筆植物紀錄：'+P.slice(0,4).map(r=>r.name).join('、')+(P.length>4?'…':'');$('upd').hidden=false;$('upm').classList.add('on');setTimeout(()=>$('upc').focus(),60)}
 function upData(){const cls=$('upc').value.trim(),grp=$('upg').value.trim(),student=$('upn').value.trim();if(!cls||!grp||!student){$('uperr').textContent='請完整填寫班級、組別與姓名';return null}
- try{localStorage.setItem(IDK,JSON.stringify({cls,grp,student}))}catch(e){}return{cls,grp,student}}
+ return{cls,grp,student}}
 async function doUpload(){const who=upData();if(!who)return;const P=pend(),btn=$('ups');btn.disabled=true;btn.textContent='上傳中…';$('uperr').textContent='';
  const items=P.map(r=>({name:r.name,note:r.note,date:r.date,x:r.x,y:r.y,z:r.z}));
  try{let id;
@@ -422,7 +422,7 @@ async function doUpload(){const who=upData();if(!who)return;const P=pend(),btn=$
   else{if(!(window.claude&&claude.use))throw{code:'nodb'};const db=await claude.use('db'),user=await claude.use('user');const uid=user?await user.id():null;if(!db||!uid)throw{code:'nodb'};
    id='u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);const up={ts:new Date().toISOString(),cls:who.cls,grp:who.grp,student:who.student,items},ref=db.doc('subs/'+uid);
    try{await ref.update({uploads:{[id]:up}})}catch(e){if(e&&e.code==='invalid_argument')await ref.set({uploads:{[id]:up}});else throw e}}
-  P.forEach(r=>{r.up=true;r.upId=id});saveRecs();selMark=-1;updateTask();dirty=true;$('upm').classList.remove('on');toast('已上傳 '+P.length+' 筆，老師可以在後台看到了')}
+  RECS=RECS.filter(r=>P.indexOf(r)<0);saveRecs();selMark=-1;updateTask();dirty=true;$('upm').classList.remove('on');toast('已上傳 '+P.length+' 筆，老師可以在後台看到了')}
  catch(e){const c=e&&e.code;$('uperr').textContent=c==='nodb'?'這個網頁尚未設定上傳位置。請按下方「下載檔案」，把檔案交給老師。':c==='remote'?'伺服器沒有接受資料，請稍後再試，或按下方「下載檔案」。':c==='invalid_argument'?'你的帳號沒有上傳權限（需要「貢獻者」以上），請洽老師。':c==='quota_exceeded'?'資料庫容量已滿，請洽老師。':(e instanceof TypeError)?'目前連不到上傳伺服器。請先按下方「下載檔案」，把檔案交給老師，並請老師檢查上傳設定。':'上傳失敗，請稍後再試，或按下方「下載檔案」。';$('upd').hidden=false}
  btn.disabled=false;btn.textContent='確定上傳'}
 $('tup').onclick=openUpload;$('upx').onclick=()=>$('upm').classList.remove('on');$('ups').onclick=doUpload;
@@ -548,7 +548,7 @@ function frame(t){const dt=Math.min(50,t-last);last=t;let mv=false;
  if(draft)dirty=true;
  if(mv||dirty){try{draw()}catch(err){console.error(err)}dirty=false}requestAnimationFrame(frame)}
 addEventListener('resize',resize);
-$('ver').textContent='版本 20261008-2　·　上傳設定：'+(ENDPOINT?'已設定':'未設定');
+$('ver').textContent='版本 20261008-3　·　上傳設定：'+(ENDPOINT?'已設定':'未設定');
 loadRecs();updateTask();
 (async()=>{resize();readColors();requestAnimationFrame(frame);await tick();
  D=JSON.parse($('d').textContent);pt=30;await tick();build();recolor();built=true;pt=70;await tick();pt=90;await tick();dirty=true;pt=100})();
